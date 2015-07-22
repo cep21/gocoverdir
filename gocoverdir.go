@@ -30,15 +30,15 @@ type gocoverdir struct {
 }
 
 type args struct {
-	covermode     string
-	cpu           int
-	ignoreDirs    string
-	depth         int
-	timeout       time.Duration
-	testout       string
-	logfile       string
-	coverprofile  string
-	printcoverage bool
+	covermode        string
+	cpu              int
+	ignoreDirs       string
+	depth            int
+	timeout          time.Duration
+	testout          string
+	logfile          string
+	coverprofile     string
+	printcoverage    bool
 	requiredcoverage float64
 
 	htmlcoverage bool
@@ -54,10 +54,24 @@ func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
 	fs.StringVar(&m.args.testout, "testout", "-", "File to print testing output to")
 	fs.StringVar(&m.args.ignoreDirs, "ignoredirs", ".git:Godeps:vendor", "Color separated path of directories to ignore")
 	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Timeout for each individual run of cover")
-	fs.StringVar(&m.args.coverprofile, "coverprofile", "coverage.out", "Combined coverage profile file")
+	fs.StringVar(&m.args.coverprofile, "coverprofile", filepath.Join(os.TempDir(), "coverage.out"), "Combined coverage profile file")
 	fs.BoolVar(&m.args.printcoverage, "printcoverage", true, "Print coverage amount to stdout")
 	fs.Float64Var(&m.args.requiredcoverage, "requiredcoverage", 0.0, "Program will fatal if coverage is < this value")
 	fs.BoolVar(&m.args.htmlcoverage, "htmlcoverage", false, "If true, will generate coverage output in a temp file")
+}
+
+func (m *gocoverdir) setupLogFile() {
+	if m.args.logfile == "-" {
+		m.log = log.New(os.Stderr, "", log.LstdFlags)
+	} else {
+		m.log = log.New(ioutil.Discard, "", 0)
+	}
+}
+
+func (m *gocoverdir) verifyParams() {
+	if m.args.requiredcoverage < 0.0 || m.args.requiredcoverage > 100.0001 {
+		m.log.Panicf("Required coverage must be >= 0 && <= 100, but is %f", m.args.requiredcoverage)
+	}
 }
 
 func (m *gocoverdir) setup() error {
@@ -67,16 +81,8 @@ func (m *gocoverdir) setup() error {
 			m.log.Printf("Error running setup: %s", err)
 		}
 	}()
-
-	if m.args.logfile == "-" {
-		m.log = log.New(os.Stderr, "", log.LstdFlags)
-	} else {
-		m.log = log.New(ioutil.Discard, "", 0)
-	}
-
-	if m.args.requiredcoverage < 0.0 || m.args.requiredcoverage > 100.0001 {
-		m.log.Panic("Required coverage must be >= 0 && <= 100, but is %f", m.args.requiredcoverage)
-	}
+	m.setupLogFile()
+	m.verifyParams()
 
 	if m.args.testout == "-" {
 		m.testOutput = os.Stdout
@@ -222,35 +228,42 @@ func (m *gocoverdir) handleErr(err error) {
 		}
 	}
 	err = ioutil.WriteFile(m.args.coverprofile, outputBuffer.Bytes(), 0644)
+	if err != nil {
+		return
+	}
+	err = m.handleCoverage()
+}
 
+func (m *gocoverdir) handleCoverage() error {
+	var err error
 	if m.args.htmlcoverage {
 		htmlout := filepath.Join(os.TempDir(), "cover.html")
-		m.log.Printf("Generating coverage HTML at %s or %s", htmlout, "file://" + htmlout)
+		m.log.Printf("Generating coverage HTML at %s or %s", htmlout, "file://"+htmlout)
 		cmd := exec.Command("go", "tool", "cover", "-html", m.args.coverprofile, "-o", htmlout)
 		if err = cmd.Run(); err != nil {
-			return
+			return err
 		}
 	}
 
-
 	if m.args.printcoverage || m.args.requiredcoverage > 0.0 {
 		var coverage float64
-		coverage, err = m.calculateCoverage();
+		coverage, err = m.calculateCoverage()
 		if err != nil {
-			return
+			return err
 		}
 
 		if m.args.printcoverage {
 			fmt.Printf("coverage: %.1f%% of statements\n", coverage)
 		}
 		if m.args.requiredcoverage > 0.0 {
-			if coverage < m.args.requiredcoverage - .001 {
+			if coverage < m.args.requiredcoverage-.001 {
 				msg := fmt.Sprintf("Code coverage %f less than required %f.  See profile.out to debug", coverage, m.args.requiredcoverage)
 				m.log.Panic(msg)
 				panic(msg)
 			}
 		}
 	}
+	return nil
 }
 
 func (m *gocoverdir) calculateCoverage() (float64, error) {
@@ -271,7 +284,7 @@ func (m *gocoverdir) calculateCoverage() (float64, error) {
 	if total == 0 {
 		return 0.0, nil
 	}
-	return float64(covered)/float64(total) * 100, nil
+	return float64(covered) / float64(total) * 100, nil
 }
 
 func main() {

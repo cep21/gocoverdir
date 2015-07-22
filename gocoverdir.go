@@ -40,6 +40,7 @@ type args struct {
 	coverprofile     string
 	printcoverage    bool
 	requiredcoverage float64
+	race bool
 
 	htmlcoverage bool
 }
@@ -52,6 +53,7 @@ func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
 	fs.IntVar(&m.args.cpu, "cpu", -1, "Number of CPUs to use.  If negative, use default.")
 	fs.StringVar(&m.args.logfile, "logfile", "-", "Logfile to print output to")
 	fs.StringVar(&m.args.testout, "testout", "-", "File to print testing output to")
+	fs.BoolVar(&m.args.race, "race", false, "If true, run commands with race detector")
 	fs.StringVar(&m.args.ignoreDirs, "ignoredirs", ".git:Godeps:vendor", "Color separated path of directories to ignore")
 	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Timeout for each individual run of cover")
 	fs.StringVar(&m.args.coverprofile, "coverprofile", filepath.Join(os.TempDir(), "coverage.out"), "Combined coverage profile file")
@@ -138,6 +140,9 @@ func (m *gocoverdir) coverDir(dirpath string) error {
 	}
 	if m.args.cpu >= 0 {
 		args = append(args, "-cpu", fmt.Sprintf("%d", m.args.cpu))
+	}
+	if m.args.race {
+		args = append(args, "-race")
 	}
 	args = append(args, "./"+dirpath)
 	cmd := exec.Command(executable, args...)

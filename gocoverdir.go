@@ -26,7 +26,10 @@ type gocoverdir struct {
 	log                *log.Logger
 	godepEnabled       bool
 
-	testOutput io.WriteCloser
+	panicPrintBuffer bytes.Buffer
+	logfile io.WriteCloser
+	testOutputStderr io.Writer
+	testOutputStdout io.Writer
 }
 
 type args struct {
@@ -35,7 +38,6 @@ type args struct {
 	ignoreDirs       string
 	depth            int
 	timeout          time.Duration
-	testout          string
 	logfile          string
 	coverprofile     string
 	printcoverage    bool
@@ -48,26 +50,42 @@ type args struct {
 var mainStruct gocoverdir
 
 func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
-	fs.StringVar(&m.args.covermode, "covermode", "set", "go test -cover ?")
+	fs.StringVar(&m.args.covermode, "covermode", "set", "Same as -covermode in 'go test'")
+	fs.IntVar(&m.args.cpu, "cpu", -1, "Same as -cpu in 'go test'")
+	fs.BoolVar(&m.args.race, "race", false, "Same as -race in 'go test'")
+	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Same as -timeout in 'go test'")
+	fs.StringVar(&m.args.coverprofile, "coverprofile", filepath.Join(os.TempDir(), "coverage.out"), "Same as -coverprofile in 'go test', but will be a combined cover profile.")
+
 	fs.IntVar(&m.args.depth, "depth", 10, "Directory depth to search.")
-	fs.IntVar(&m.args.cpu, "cpu", -1, "Number of CPUs to use.  If negative, use default.")
-	fs.StringVar(&m.args.logfile, "logfile", "-", "Logfile to print output to")
-	fs.StringVar(&m.args.testout, "testout", "-", "File to print testing output to")
-	fs.BoolVar(&m.args.race, "race", false, "If true, run commands with race detector")
 	fs.StringVar(&m.args.ignoreDirs, "ignoredirs", ".git:Godeps:vendor", "Color separated path of directories to ignore")
-	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Timeout for each individual run of cover")
-	fs.StringVar(&m.args.coverprofile, "coverprofile", filepath.Join(os.TempDir(), "coverage.out"), "Combined coverage profile file")
-	fs.BoolVar(&m.args.printcoverage, "printcoverage", true, "Print coverage amount to stdout")
+
+	fs.StringVar(&m.args.logfile, "logfile", "-", "Logfile to print debug output to.  Empty means be silent unless there is an error, then dump to stderr")
+
+	fs.BoolVar(&m.args.printcoverage, "printcoverage", false, "Print coverage amount to stdout")
 	fs.Float64Var(&m.args.requiredcoverage, "requiredcoverage", 0.0, "Program will fatal if coverage is < this value")
 	fs.BoolVar(&m.args.htmlcoverage, "htmlcoverage", false, "If true, will generate coverage output in a temp file")
 }
 
-func (m *gocoverdir) setupLogFile() {
+func (m *gocoverdir) setupLogFile() error {
 	if m.args.logfile == "-" {
 		m.log = log.New(os.Stderr, "", log.LstdFlags)
+		m.testOutputStderr = os.Stderr
+		m.testOutputStdout = os.Stdout
+	} else if m.args.logfile == "" {
+		m.log = log.New(&m.panicPrintBuffer, "", 0)
+		m.testOutputStderr = &m.panicPrintBuffer
+		m.testOutputStdout = &m.panicPrintBuffer
 	} else {
-		m.log = log.New(ioutil.Discard, "", 0)
+		var err error
+		m.logfile, err = os.OpenFile(m.args.logfile, os.O_CREATE | os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		m.log = log.New(m.logfile, "", 0)
+		m.testOutputStderr = m.logfile
+		m.testOutputStdout = m.logfile
 	}
+	return nil
 }
 
 func (m *gocoverdir) verifyParams() {
@@ -86,13 +104,6 @@ func (m *gocoverdir) setup() error {
 	m.setupLogFile()
 	m.verifyParams()
 
-	if m.args.testout == "-" {
-		m.testOutput = os.Stdout
-	} else {
-		if m.testOutput, err = os.Open(m.args.testout); err != nil {
-			return err
-		}
-	}
 	if f, err := os.Open("Godeps"); err == nil {
 		if stat, err := f.Stat(); err == nil && stat.IsDir() {
 			m.godepEnabled = true
@@ -117,7 +128,9 @@ func (m *gocoverdir) Close() error {
 	if len(m.storeDir) < 4 {
 		panic("mainStruct not setup correctly")
 	}
-	m.testOutput.Close()
+	if m.logfile != nil {
+		m.logfile.Close()
+	}
 	return os.RemoveAll(m.storeDir)
 }
 
@@ -146,8 +159,8 @@ func (m *gocoverdir) coverDir(dirpath string) error {
 	}
 	args = append(args, "./"+dirpath)
 	cmd := exec.Command(executable, args...)
-	cmd.Stdout = m.testOutput
-	cmd.Stderr = m.testOutput
+	cmd.Stdout = m.testOutputStdout
+	cmd.Stderr = m.testOutputStderr
 	m.log.Printf("Executing %s %s", cmd.Path, strings.Join(cmd.Args, " "))
 	if err := cmd.Start(); err != nil {
 		return err
@@ -262,7 +275,7 @@ func (m *gocoverdir) handleCoverage() error {
 		}
 		if m.args.requiredcoverage > 0.0 {
 			if coverage < m.args.requiredcoverage-.001 {
-				msg := fmt.Sprintf("Code coverage %f less than required %f.  See profile.out to debug", coverage, m.args.requiredcoverage)
+				msg := fmt.Sprintf("Code coverage %f less than required %f.  See profile.out to debug or run 'go tool cover -html %s -o /tmp/cover.html'", coverage, m.args.requiredcoverage, m.args.coverprofile)
 				m.log.Panic(msg)
 				panic(msg)
 			}
@@ -295,6 +308,12 @@ func (m *gocoverdir) calculateCoverage() (float64, error) {
 func main() {
 	// handleErr may fatal.  Let the close get called
 	defer mainStruct.Close()
+	defer func() {
+		if panicCondition := recover(); panicCondition != nil {
+			io.Copy(os.Stderr, &mainStruct.panicPrintBuffer)
+			panic(panicCondition)
+		}
+	}()
 	mainStruct.setupFlags(flag.CommandLine)
 	flag.Parse()
 	err := mainStruct.Main()

@@ -13,7 +13,7 @@ before_install:
   - go get github.com/mattn/goveralls
 
 install:
-  - go get -d -v -t ./... 
+  - go install -v .
 
 script:
   - goverify -v

@@ -54,7 +54,11 @@ func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
 	fs.IntVar(&m.args.cpu, "cpu", -1, "Same as -cpu in 'go test'")
 	fs.BoolVar(&m.args.race, "race", false, "Same as -race in 'go test'")
 	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Same as -timeout in 'go test'")
-	fs.StringVar(&m.args.coverprofile, "coverprofile", filepath.Join(os.TempDir(), "coverage.out"), "Same as -coverprofile in 'go test', but will be a combined cover profile.")
+	coveroutdir := os.Getenv("GOCOVERDIR_DIR")
+	if coveroutdir == "" {
+		coveroutdir = os.TempDir()
+	}
+	fs.StringVar(&m.args.coverprofile, "coverprofile", filepath.Join(coveroutdir, "coverage.out"), "Same as -coverprofile in 'go test', but will be a combined cover profile.")
 
 	fs.IntVar(&m.args.depth, "depth", 10, "Directory depth to search.")
 	fs.StringVar(&m.args.ignoreDirs, "ignoredirs", ".git:Godeps:vendor", "Color separated path of directories to ignore")

@@ -39,6 +39,9 @@ type args struct {
 	logfile       string
 	coverprofile  string
 	printcoverage bool
+	requiredcoverage float64
+
+	htmlcoverage bool
 }
 
 var mainStruct gocoverdir
@@ -53,6 +56,8 @@ func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
 	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Timeout for each individual run of cover")
 	fs.StringVar(&m.args.coverprofile, "coverprofile", "coverage.out", "Combined coverage profile file")
 	fs.BoolVar(&m.args.printcoverage, "printcoverage", true, "Print coverage amount to stdout")
+	fs.Float64Var(&m.args.requiredcoverage, "requiredcoverage", 0.0, "Program will fatal if coverage is < this value")
+	fs.BoolVar(&m.args.htmlcoverage, "htmlcoverage", false, "If true, will generate coverage output in a temp file")
 }
 
 func (m *gocoverdir) setup() error {
@@ -67,6 +72,10 @@ func (m *gocoverdir) setup() error {
 		m.log = log.New(os.Stderr, "", log.LstdFlags)
 	} else {
 		m.log = log.New(ioutil.Discard, "", 0)
+	}
+
+	if m.args.requiredcoverage < 0.0 || m.args.requiredcoverage > 100.0001 {
+		m.log.Panic("Required coverage must be >= 0 && <= 100, but is %f", m.args.requiredcoverage)
 	}
 
 	if m.args.testout == "-" {
@@ -214,15 +223,40 @@ func (m *gocoverdir) handleErr(err error) {
 	}
 	err = ioutil.WriteFile(m.args.coverprofile, outputBuffer.Bytes(), 0644)
 
-	if m.args.printcoverage {
-		err = m.printCoverage()
+	if m.args.htmlcoverage {
+		htmlout := filepath.Join(os.TempDir(), "cover.html")
+		m.log.Printf("Generating coverage HTML at %s or %s", htmlout, "file://" + htmlout)
+		cmd := exec.Command("go", "tool", "cover", "-html", m.args.coverprofile, "-o", htmlout)
+		if err = cmd.Run(); err != nil {
+			return
+		}
+	}
+
+
+	if m.args.printcoverage || m.args.requiredcoverage > 0.0 {
+		var coverage float64
+		coverage, err = m.calculateCoverage();
+		if err != nil {
+			return
+		}
+
+		if m.args.printcoverage {
+			fmt.Printf("coverage: %.1f%% of statements\n", coverage)
+		}
+		if m.args.requiredcoverage > 0.0 {
+			if coverage < m.args.requiredcoverage - .001 {
+				msg := fmt.Sprintf("Code coverage %f less than required %f.  See profile.out to debug", coverage, m.args.requiredcoverage)
+				m.log.Panic(msg)
+				panic(msg)
+			}
+		}
 	}
 }
 
-func (m *gocoverdir) printCoverage() error {
+func (m *gocoverdir) calculateCoverage() (float64, error) {
 	profiles, err := cover.ParseProfiles(m.args.coverprofile)
 	if err != nil {
-		return err
+		return 0.0, err
 	}
 	total := 0
 	covered := 0
@@ -234,8 +268,10 @@ func (m *gocoverdir) printCoverage() error {
 			}
 		}
 	}
-	fmt.Printf("coverage: %.1f%% of statements\n", float64(covered)/float64(total)*100)
-	return nil
+	if total == 0 {
+		return 0.0, nil
+	}
+	return float64(covered)/float64(total) * 100, nil
 }
 
 func main() {

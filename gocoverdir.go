@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"golang.org/x/tools/cover"
 )
 
 type gocoverdir struct {
@@ -36,6 +37,7 @@ type args struct {
 	testout      string
 	logfile      string
 	coverprofile string
+	printcoverage bool
 }
 
 var mainStruct gocoverdir
@@ -49,6 +51,7 @@ func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
 	fs.StringVar(&m.args.ignoreDirs, "ignoredirs", ".git:Godeps:vendor", "Color separated path of directories to ignore")
 	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Timeout for each individual run of cover")
 	fs.StringVar(&m.args.coverprofile, "coverprofile", "coverage.out", "Combined coverage profile file")
+	fs.BoolVar(&m.args.printcoverage, "printcoverage", true, "Print coverage amount to stdout")
 }
 
 func (m *gocoverdir) setup() error {
@@ -209,6 +212,24 @@ func (m *gocoverdir) handleErr(err error) {
 		}
 	}
 	err = ioutil.WriteFile(m.args.coverprofile, outputBuffer.Bytes(), 0644)
+
+	if m.args.printcoverage {
+		profiles, err := cover.ParseProfiles(m.args.coverprofile)
+		if err != nil {
+			return
+		}
+		total := 0
+		covered := 0
+		for _, profile := range profiles {
+			for _, block := range profile.Blocks {
+				total += block.NumStmt
+				if block.Count > 0 {
+					covered += block.NumStmt
+				}
+			}
+		}
+		fmt.Printf("coverage: %.1f%% of statements\n", float64(covered)/float64(total) * 100)
+	}
 }
 
 func main() {

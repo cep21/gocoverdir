@@ -1,10 +1,11 @@
 package main
 
 import (
-	"testing"
-	"github.com/stretchr/testify/assert"
 	"flag"
 	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGocoverdir(t *testing.T) {

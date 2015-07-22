@@ -1,39 +1,40 @@
 package main
+
 import (
-	"flag"
-	"os/exec"
-	"time"
-	"path/filepath"
-	"io/ioutil"
-	"os"
-	"sync/atomic"
-	"fmt"
-	"log"
-	"path"
-	"strings"
-	"io"
 	"bytes"
+	"flag"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"time"
 )
 
 type gocoverdir struct {
-	args args
-	ignoreDirSet map[string]struct{}
-	storeDir string
+	args               args
+	ignoreDirSet       map[string]struct{}
+	storeDir           string
 	currentOutputIndex int64
-	log *log.Logger
-	godepEnabled bool
+	log                *log.Logger
+	godepEnabled       bool
 
 	testOutput io.WriteCloser
 }
 
 type args struct {
-	covermode string
-	cpu int
-	ignoreDirs string
-	depth int
-	timeout time.Duration
-	testout string
-	logfile string
+	covermode    string
+	cpu          int
+	ignoreDirs   string
+	depth        int
+	timeout      time.Duration
+	testout      string
+	logfile      string
 	coverprofile string
 }
 
@@ -46,7 +47,7 @@ func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
 	fs.StringVar(&m.args.logfile, "logfile", "-", "Logfile to print output to")
 	fs.StringVar(&m.args.testout, "testout", "-", "File to print testing output to")
 	fs.StringVar(&m.args.ignoreDirs, "ignoredirs", ".git:Godeps:vendor", "Color separated path of directories to ignore")
-	fs.DurationVar(&m.args.timeout, "timeout", time.Second * 3, "Timeout for each individual run of cover")
+	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Timeout for each individual run of cover")
 	fs.StringVar(&m.args.coverprofile, "coverprofile", "coverage.out", "Combined coverage profile file")
 }
 
@@ -119,7 +120,7 @@ func (m *gocoverdir) coverDir(dirpath string) error {
 	if m.args.cpu >= 0 {
 		args = append(args, "-cpu", fmt.Sprintf("%d", m.args.cpu))
 	}
-	args = append(args, "./" + dirpath)
+	args = append(args, "./"+dirpath)
 	cmd := exec.Command(executable, args...)
 	cmd.Stdout = m.testOutput
 	cmd.Stderr = m.testOutput
@@ -151,7 +152,7 @@ func (m *gocoverdir) coverDirectory(dirpath string, depth int) error {
 		if file.IsDir() {
 			if _, ignoredDir := m.ignoreDirSet[file.Name()]; !ignoredDir {
 				finalName := filepath.Join(dirpath, file.Name())
-				err := m.coverDirectory(finalName, depth + 1)
+				err := m.coverDirectory(finalName, depth+1)
 				if err != nil {
 					return err
 				}

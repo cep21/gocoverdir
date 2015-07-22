@@ -1,0 +1,21 @@
+{
+  "ignoreDir": ["calc_test.go"],
+  "checks": [
+    {
+      "macro": "goimport"
+    }, {
+      "macro": "gofmt"
+    }, {
+      "macro": "vet"
+    }, {
+      "macro": "golint"
+    }, {
+      "macro": "gocyclo"
+    }, {
+      "macro": "go-cover",
+      "validate": {
+        "coverage": 5
+      }
+    }
+  ]
+}

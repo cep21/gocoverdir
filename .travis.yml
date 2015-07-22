@@ -16,5 +16,7 @@ install:
 script:
   - goverify -v
   - go run gocoverdir.go
+
+after_success:
   - goveralls -coverprofile=coverage.out -service=travis-ci
   - cat coverage.out

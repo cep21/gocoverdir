@@ -27,7 +27,7 @@ type gocoverdir struct {
 	godepEnabled       bool
 
 	panicPrintBuffer bytes.Buffer
-	logfile io.WriteCloser
+	logfile          io.WriteCloser
 	testOutputStderr io.Writer
 	testOutputStdout io.Writer
 }
@@ -42,7 +42,7 @@ type args struct {
 	coverprofile     string
 	printcoverage    bool
 	requiredcoverage float64
-	race bool
+	race             bool
 
 	htmlcoverage bool
 }
@@ -77,7 +77,7 @@ func (m *gocoverdir) setupLogFile() error {
 		m.testOutputStdout = &m.panicPrintBuffer
 	} else {
 		var err error
-		m.logfile, err = os.OpenFile(m.args.logfile, os.O_CREATE | os.O_WRONLY, 0644)
+		m.logfile, err = os.OpenFile(m.args.logfile, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return err
 		}

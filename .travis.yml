@@ -15,4 +15,5 @@ install:
 
 script:
   - goverify -v
-  - goveralls -service=travis-ci
+  - go run gocoverdir.go
+  - goveralls -coverprofile=coverage.out -service=travis-ci

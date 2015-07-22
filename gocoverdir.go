@@ -50,7 +50,7 @@ type args struct {
 var mainStruct gocoverdir
 
 func (m *gocoverdir) setupFlags(fs *flag.FlagSet) {
-	fs.StringVar(&m.args.covermode, "covermode", "set", "Same as -covermode in 'go test'")
+	fs.StringVar(&m.args.covermode, "covermode", "", "Same as -covermode in 'go test'.  If running with -race, probably best not to set this.")
 	fs.IntVar(&m.args.cpu, "cpu", -1, "Same as -cpu in 'go test'")
 	fs.BoolVar(&m.args.race, "race", false, "Same as -race in 'go test'")
 	fs.DurationVar(&m.args.timeout, "timeout", time.Second*3, "Same as -timeout in 'go test'")
@@ -147,7 +147,10 @@ func (m *gocoverdir) coverDir(dirpath string) error {
 	} else {
 		executable = "go"
 	}
-	args = append(args, "test", "-cover", "-covermode", m.args.covermode, "-coverprofile", m.nextCoverprofileName(), "-outputdir", m.storeDir)
+	args = append(args, "test", "-cover", "-coverprofile", m.nextCoverprofileName(), "-outputdir", m.storeDir)
+	if m.args.covermode != "" {
+		args = append(args, "-covermode", m.args.covermode)
+	}
 	if m.args.timeout.Nanoseconds() > 0 {
 		args = append(args, "-timeout", m.args.timeout.String())
 	}

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
 	"golang.org/x/tools/cover"
 )
 
@@ -29,14 +30,14 @@ type gocoverdir struct {
 }
 
 type args struct {
-	covermode    string
-	cpu          int
-	ignoreDirs   string
-	depth        int
-	timeout      time.Duration
-	testout      string
-	logfile      string
-	coverprofile string
+	covermode     string
+	cpu           int
+	ignoreDirs    string
+	depth         int
+	timeout       time.Duration
+	testout       string
+	logfile       string
+	coverprofile  string
 	printcoverage bool
 }
 
@@ -214,22 +215,27 @@ func (m *gocoverdir) handleErr(err error) {
 	err = ioutil.WriteFile(m.args.coverprofile, outputBuffer.Bytes(), 0644)
 
 	if m.args.printcoverage {
-		profiles, err := cover.ParseProfiles(m.args.coverprofile)
-		if err != nil {
-			return
-		}
-		total := 0
-		covered := 0
-		for _, profile := range profiles {
-			for _, block := range profile.Blocks {
-				total += block.NumStmt
-				if block.Count > 0 {
-					covered += block.NumStmt
-				}
+		err = m.printCoverage()
+	}
+}
+
+func (m *gocoverdir) printCoverage() error {
+	profiles, err := cover.ParseProfiles(m.args.coverprofile)
+	if err != nil {
+		return err
+	}
+	total := 0
+	covered := 0
+	for _, profile := range profiles {
+		for _, block := range profile.Blocks {
+			total += block.NumStmt
+			if block.Count > 0 {
+				covered += block.NumStmt
 			}
 		}
-		fmt.Printf("coverage: %.1f%% of statements\n", float64(covered)/float64(total) * 100)
 	}
+	fmt.Printf("coverage: %.1f%% of statements\n", float64(covered)/float64(total)*100)
+	return nil
 }
 
 func main() {

@@ -7,6 +7,9 @@ go:
 
 install:
   - go get -u github.com/cep21/goverify
+  - go get github.com/axw/gocov/gocov
+  - go get github.com/mattn/goveralls
   - go get -d -v -t ./... 
 script:
   - goverify -v
+  - goveralls -service=travis-ci

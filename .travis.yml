@@ -17,3 +17,4 @@ script:
   - goverify -v
   - go run gocoverdir.go
   - goveralls -coverprofile=coverage.out -service=travis-ci
+  - cat coverage.out
